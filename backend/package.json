@@ -21,7 +21,8 @@
     "ioredis": "^5.4.1",
     "json2csv": "^5.0.7",
     "jsonwebtoken": "^9.0.2",
-    "pdfkit": "^0.15.0"
+    "pdfkit": "^0.15.0",
+    "typescript": "^5.4.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -32,7 +33,6 @@
     "@types/node": "^20.12.12",
     "@types/pdfkit": "^0.13.4",
     "prisma": "^5.14.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "ts-node": "^10.9.2"
   }
 }
