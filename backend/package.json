@@ -5,7 +5,7 @@
     "dev": "npx ts-node src/app.ts",
     "build": "npx tsc",
     "start": "node server.js",
-    "vercel-build": "npx prisma generate && npx tsc"
+    "vercel-build": "npx prisma generate && npx -p typescript tsc"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
