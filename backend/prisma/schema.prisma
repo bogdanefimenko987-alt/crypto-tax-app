@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AssetCategory {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  currency  String
+  category  String
+
+  @@unique([userId, currency])
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  jurisdiction   String   @default("RU")
+  baseCurrency   String   @default("RUB")
+  costMethod     String   @default("FIFO")
+  createdAt      DateTime @default(now())
+  apiKeys        ApiKey[]
+  transactions   Transaction[]
+  lots           Lot[]
+  taxEvents      TaxEvent[]
+  portfolioSnaps BalanceSnapshot[]
+  assetCategories  AssetCategory[]
+}
+
+model ApiKey {
+  id              String   @id @default(uuid())
+  user            User     @relation(fields: [userId], references: [id])
+  userId          String
+  exchange        String
+  encryptedKey    String
+  encryptedSecret String
+  extra           Json?
+  isActive        Boolean  @default(true)
+  lastSync        DateTime?   // ← добавлено
+}
+
+model Transaction {
+  id            String    @id @default(uuid())
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String
+  exchange      String
+  externalId    String?
+  type          String
+  baseCurrency  String
+  quoteCurrency String
+  baseAmount    Decimal   @db.Decimal(30,12)
+  quoteAmount   Decimal?  @db.Decimal(30,12)
+  fee           Decimal?  @db.Decimal(30,12)
+  feeCurrency   String?
+  timestamp     DateTime
+  notes         String?
+  manualEdit    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  lots          Lot[]     @relation("lotOpen")
+
+  @@index([userId, exchange, timestamp])
+  @@index([userId, baseCurrency, timestamp])
+}
+
+model Lot {
+  id              String      @id @default(uuid())
+  user            User        @relation(fields: [userId], references: [id])
+  userId          String
+  currency        String
+  openTransaction Transaction @relation("lotOpen", fields: [openTxId], references: [id])
+  openTxId        String
+  totalAmount     Decimal     @db.Decimal(30,12)
+  remainingAmount Decimal     @db.Decimal(30,12)
+  costPerUnit     Decimal     @db.Decimal(30,12)
+  acquiredAt      DateTime
+  closed          Boolean     @default(false)
+}
+
+model TaxEvent {
+  id            String   @id @default(uuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  taxYear       Int
+  eventType     String
+  date          DateTime
+  currency      String
+  proceeds      Decimal  @db.Decimal(30,12)
+  costBasis     Decimal  @db.Decimal(30,12)
+  gainLoss      Decimal  @db.Decimal(30,12)
+  holdingPeriod String?
+  taxRate       Decimal  @db.Decimal(5,2)
+  taxAmount     Decimal  @db.Decimal(30,12)
+  details       Json?
+}
+
+model BalanceSnapshot {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  date      DateTime
+  currency  String
+  amount    Decimal  @db.Decimal(30,12)
+  costBasis Decimal  @db.Decimal(30,12)
+}
