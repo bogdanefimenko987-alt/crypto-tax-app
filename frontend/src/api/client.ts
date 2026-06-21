@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-// Определяем базовый URL
-const baseURL = (import.meta.env.VITE_API_URL || '') + '/api';
+const baseURL = import.meta.env.VITE_API_URL || '/api';
 
 const apiClient = axios.create({
   baseURL,
