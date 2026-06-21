@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import prisma from '../config/database';
-import { Decimal } from 'decimal.js';
 
 const router = Router();
 router.use(authenticate);
@@ -19,20 +18,18 @@ router.get('/', async (req: AuthRequest, res) => {
   const catMap: Record<string, string> = {};
   categories.forEach(c => { catMap[c.currency] = c.category; });
 
-  const holdings: Record<string, { amount: Decimal; costBasis: Decimal; category?: string }> = {};
+  const holdings: Record<string, { amount: number; costBasis: number; category?: string }> = {};
   for (const lot of lots) {
     const currency = lot.currency;
     if (!holdings[currency]) {
       holdings[currency] = {
-        amount: new Decimal(0),
-        costBasis: new Decimal(0),
+        amount: 0,
+        costBasis: 0,
         category: catMap[currency] || 'Без категории',
       };
     }
-    holdings[currency].amount = holdings[currency].amount.plus(lot.remainingAmount.toString());
-    holdings[currency].costBasis = holdings[currency].costBasis.plus(
-      new Decimal(lot.costPerUnit.toString()).times(lot.remainingAmount.toString())
-    );
+    holdings[currency].amount += lot.remainingAmount;           // теперь это Float
+    holdings[currency].costBasis += lot.costPerUnit * lot.remainingAmount; // число
   }
 
   res.json({ holdings });
@@ -54,9 +51,9 @@ router.get('/pnl', async (req: AuthRequest, res) => {
 
   const result = pnlByCurrency.map((item) => ({
     currency: item.currency,
-    proceeds: item._sum.proceeds?.toString() || '0',
-    costBasis: item._sum.costBasis?.toString() || '0',
-    gainLoss: item._sum.gainLoss?.toString() || '0',
+    proceeds: item._sum.proceeds || 0,
+    costBasis: item._sum.costBasis || 0,
+    gainLoss: item._sum.gainLoss || 0,
   }));
 
   res.json(result);

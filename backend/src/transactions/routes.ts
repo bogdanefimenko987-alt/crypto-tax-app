@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import prisma from '../config/database';
-import { processTransaction } from '../services/costBasisService';
-import { Decimal } from 'decimal.js';
+// import { processTransaction } from '../services/costBasisService';  // отключено для SQLite
 
 const router = Router();
 router.use(authenticate);
@@ -26,22 +25,21 @@ router.post('/manual', async (req: AuthRequest, res) => {
 
   // Обработка свопа
   if (type === 'SWAP') {
-    // Проверка обязательных полей для свопа
     if (!swapInCurrency || !swapInAmount) {
-      return res.status(400).json({ error: 'Для свопа укажите валюту и количество получения (swapInCurrency, swapInAmount)' });
+      return res.status(400).json({ error: 'Для свопа укажите валюту и количество получения' });
     }
 
-    // Создаём SWAP_OUT (продажа baseCurrency)
+    // SWAP_OUT (отдаём baseCurrency)
     const swapOut = await prisma.transaction.create({
       data: {
         userId: req.user!.id,
         exchange: 'manual',
         type: 'SWAP_OUT',
         baseCurrency,
-        quoteCurrency,       // валюта расчёта (например, USDT)
-        baseAmount: new Decimal(baseAmount).negated(), // отдаём
-        quoteAmount: quoteAmount ? new Decimal(quoteAmount) : null,
-        fee: fee ? new Decimal(fee) : null,
+        quoteCurrency,
+        baseAmount: -Math.abs(Number(baseAmount)),  // отрицательное число
+        quoteAmount: Number(quoteAmount) || 0,
+        fee: Number(fee) || 0,
         feeCurrency: feeCurrency || null,
         timestamp: new Date(timestamp),
         notes: notes ? `${notes} (SWAP_OUT)` : 'SWAP_OUT',
@@ -49,17 +47,17 @@ router.post('/manual', async (req: AuthRequest, res) => {
       },
     });
 
-    // Создаём SWAP_IN (покупка swapInCurrency)
+    // SWAP_IN (получаем swapInCurrency)
     const swapIn = await prisma.transaction.create({
       data: {
         userId: req.user!.id,
         exchange: 'manual',
         type: 'SWAP_IN',
         baseCurrency: swapInCurrency,
-        quoteCurrency,       // та же валюта расчёта
-        baseAmount: new Decimal(swapInAmount), // получаем
-        quoteAmount: quoteAmount ? new Decimal(quoteAmount) : null, // обычно равно стоимости SWAP_OUT
-        fee: null,           // комиссия уже учтена в SWAP_OUT
+        quoteCurrency,
+        baseAmount: Math.abs(Number(swapInAmount)), // положительное число
+        quoteAmount: Number(quoteAmount) || 0,
+        fee: null,
         feeCurrency: null,
         timestamp: new Date(timestamp),
         notes: notes ? `${notes} (SWAP_IN)` : 'SWAP_IN',
@@ -67,48 +65,35 @@ router.post('/manual', async (req: AuthRequest, res) => {
       },
     });
 
-    // Обрабатываем обе части (расчёт себестоимости и налоги)
-    try {
-      await processTransaction(swapOut, user);
-      await processTransaction(swapIn, user);
-    } catch (err: any) {
-      // При ошибке удаляем обе транзакции
-      await prisma.transaction.deleteMany({
-        where: { id: { in: [swapOut.id, swapIn.id] } },
-      });
-      return res.status(400).json({ error: err.message });
-    }
+    // Создание лотов и налоговых событий временно отключено
+    // await processTransaction(swapOut, user);
+    // await processTransaction(swapIn, user);
 
     return res.json({ swapOut, swapIn });
   }
 
-  // Обычная транзакция (BUY, SELL, ...)
- 
+  // Обычная транзакция (BUY / SELL)
   const tx = await prisma.transaction.create({
-  data: {
-    userId: req.user!.id,
-    exchange: 'manual',
-    type,
-    baseCurrency,
-    quoteCurrency,
-    baseAmount: (type === 'SELL' || type === 'SWAP_OUT')
-      ? new Decimal(Math.abs(Number(baseAmount))).negated()
-      : new Decimal(baseAmount),
-    quoteAmount,
-    fee,
-    feeCurrency,
-    timestamp: new Date(timestamp),
-    notes,
-    manualEdit: true,
-  },
-});
+    data: {
+      userId: req.user!.id,
+      exchange: 'manual',
+      type,
+      baseCurrency,
+      quoteCurrency,
+      baseAmount: (type === 'SELL' || type === 'SWAP_OUT')
+        ? -Math.abs(Number(baseAmount))
+        : Math.abs(Number(baseAmount)),
+      quoteAmount: Number(quoteAmount) || 0,
+      fee: Number(fee) || 0,
+      feeCurrency: feeCurrency || null,
+      timestamp: new Date(timestamp),
+      notes,
+      manualEdit: true,
+    },
+  });
 
-  try {
-    await processTransaction(tx, user);
-  } catch (err: any) {
-    await prisma.transaction.delete({ where: { id: tx.id } });
-    return res.status(400).json({ error: err.message });
-  }
+  // Создание лотов и налоговых событий временно отключено
+  // await processTransaction(tx, user);
 
   res.json(tx);
 });
@@ -124,7 +109,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
   });
   if (!oldTx) return res.status(404).json({ error: 'Не найдена' });
 
-  // Для редактирования свопов нужна отдельная логика, пока упрощённо: удаляем старую и создаём новую
+  // Удаляем старую транзакцию (без пересчёта лотов)
   await prisma.transaction.delete({ where: { id } });
 
   const { type, baseCurrency, quoteCurrency, baseAmount, quoteAmount, fee, feeCurrency, timestamp, notes } = req.body;
@@ -135,22 +120,20 @@ router.put('/:id', async (req: AuthRequest, res) => {
       type,
       baseCurrency,
       quoteCurrency,
-      baseAmount,
-      quoteAmount,
-      fee,
-      feeCurrency,
+      baseAmount: (type === 'SELL' || type === 'SWAP_OUT')
+        ? -Math.abs(Number(baseAmount))
+        : Math.abs(Number(baseAmount)),
+      quoteAmount: Number(quoteAmount) || 0,
+      fee: Number(fee) || 0,
+      feeCurrency: feeCurrency || null,
       timestamp: new Date(timestamp),
       notes,
       manualEdit: true,
     },
   });
 
-  try {
-    await processTransaction(newTx, user);
-  } catch (err: any) {
-    await prisma.transaction.delete({ where: { id: newTx.id } });
-    return res.status(400).json({ error: err.message });
-  }
+  // Пересчёт лотов временно отключён
+  // await processTransaction(newTx, user);
 
   res.json(newTx);
 });

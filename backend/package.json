@@ -2,15 +2,14 @@
   "name": "crypto-tax-backend",
   "version": "1.0.0",
   "scripts": {
-  "dev": "npx ts-node src/app.ts",
-  "postinstall": "prisma generate && prisma migrate deploy"
-},
+    "dev": "npx ts-node src/app.ts",
+    "postinstall": "prisma generate && prisma migrate deploy"
+  },
   "dependencies": {
     "@prisma/client": "^5.14.0",
     "@vercel/node": "^3.2.29",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "decimal.js": "^10.4.3",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "helmet": "^7.1.0",

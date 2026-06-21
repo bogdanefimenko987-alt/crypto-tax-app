@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import prisma from '../config/database';
-import { Decimal } from 'decimal.js';
 
 const router = Router();
 router.use(authenticate);
@@ -17,8 +16,8 @@ router.get('/history', async (req: AuthRequest, res) => {
   });
 
   // Агрегируем балансы в динамике
-  const balances: Record<string, Decimal> = {};
-  const history: any[] = [];   // ← исправлено
+  const balances: Record<string, number> = {};
+  const history: any[] = [];
 
   for (const tx of txs) {
     const dateKey = tx.timestamp.toISOString().slice(0, 10); // YYYY-MM-DD
@@ -27,8 +26,8 @@ router.get('/history', async (req: AuthRequest, res) => {
       history.push({ date: dateKey });
     }
     const cur = tx.baseCurrency;
-    const amount = new Decimal(tx.baseAmount.toString());
-    balances[cur] = (balances[cur] || new Decimal(0)).plus(amount);
+    const amount = tx.baseAmount || 0; // уже число (Float)
+    balances[cur] = (balances[cur] || 0) + amount;
 
     // Записываем текущие балансы в последнюю точку
     const last = history[history.length - 1];
