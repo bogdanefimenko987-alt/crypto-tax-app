@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import prisma from '../config/database';
 import { encrypt } from '../utils/encryption';
-// import { syncQueue } from '../queue/syncExchange'; // отключено для Vercel
 
 const router = Router();
 router.use(authenticate);
