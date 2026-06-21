@@ -32,28 +32,26 @@ router.get('/report/:year/csv', async (req: AuthRequest, res) => {
     orderBy: { date: 'asc' },
   });
 
-  const fields = ['date', 'currency', 'proceeds', 'costBasis', 'gainLoss', 'taxRate', 'taxAmount'];
-  const csvData = events.map(e => ({
-    date: e.date.toISOString().slice(0,10),
-    currency: e.currency,
-    proceeds: e.proceeds.toString(),
-    costBasis: e.costBasis.toString(),
-    gainLoss: e.gainLoss.toString(),
-    taxRate: e.taxRate.toString(),
-    taxAmount: e.taxAmount.toString(),
-  }));
-
-  // Простой генератор CSV
-  const header = fields.join(',') + '\n';
-  const rows = csvData.map(row => fields.map(f => `"${row[f]}"`).join(',')).join('\n');
-  const csv = header + rows;
+  const header = 'date,currency,proceeds,costBasis,gainLoss,taxRate,taxAmount';
+  const rows = events.map(e => {
+    return [
+      e.date.toISOString().slice(0,10),
+      e.currency,
+      e.proceeds.toString(),
+      e.costBasis.toString(),
+      e.gainLoss.toString(),
+      e.taxRate.toString(),
+      e.taxAmount.toString(),
+    ].join(',');
+  });
+  const csv = header + '\n' + rows.join('\n');
 
   res.header('Content-Type', 'text/csv; charset=utf-8');
   res.attachment(`tax-report-${year}.csv`);
   res.send(csv);
 });
 
-// Экспорт в PDF (без Decimal, используем число)
+// Экспорт в PDF (упрощённый)
 router.get('/report/:year/pdf', async (req: AuthRequest, res) => {
   const year = parseInt(req.params.year);
   const events = await prisma.taxEvent.findMany({
@@ -61,7 +59,6 @@ router.get('/report/:year/pdf', async (req: AuthRequest, res) => {
     orderBy: { date: 'asc' },
   });
 
-  // PDF сформируем упрощённо, без библиотеки pdfkit (чтобы избежать Decimal)
   const summary = events.reduce((acc, e) => {
     acc.totalProceeds += e.proceeds;
     acc.totalCost += e.costBasis;
