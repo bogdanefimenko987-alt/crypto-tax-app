@@ -2,18 +2,17 @@ import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import prisma from '../config/database';
 import { encrypt } from '../utils/encryption';
-import { syncQueue } from '../queue/syncExchange';
+// import { syncQueue } from '../queue/syncExchange'; // отключено для Vercel
 
 const router = Router();
 router.use(authenticate);
 
-// Подключение новой биржи
 router.post('/connect', async (req: AuthRequest, res) => {
   const { exchange, apiKey, secret, extra } = req.body;
   const encryptedKey = encrypt(apiKey);
   const encryptedSecret = encrypt(secret);
 
-  const savedKey = await prisma.apiKey.create({
+  await prisma.apiKey.create({
     data: {
       userId: req.user!.id,
       exchange,
@@ -23,17 +22,15 @@ router.post('/connect', async (req: AuthRequest, res) => {
     },
   });
 
-  // Добавляем повторяющуюся задачу синхронизации каждые 15 минут
-  (syncQueue as any).add(
-  `sync-${req.user!.id}-${exchange}`,
-  { userId: req.user!.id, exchangeName: exchange },
-  { repeat: { every: 15 * 60 * 1000 } }
-);
+  // Синхронизация временно отключена (требуется Redis и воркер)
+  // await syncQueue.add(
+  //   { userId: req.user!.id, exchangeName: exchange },
+  //   { repeat: { every: 15 * 60 * 1000 } }
+  // );
 
-  res.json({ success: true, message: 'Биржа подключена, синхронизация запущена' });
+  res.json({ success: true, message: 'Биржа подключена (синхронизация отключена)' });
 });
 
-// Список подключенных бирж пользователя
 router.get('/list', async (req: AuthRequest, res) => {
   const apiKeys = await prisma.apiKey.findMany({
     where: { userId: req.user!.id },

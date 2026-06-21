@@ -25,7 +25,6 @@ app.use('/api/portfolio', historyRoutes);
 app.use('/api/portfolio', categoriesRoutes);
 app.use('/api/tax', taxRoutes);
 
-// Локально запускаем сервер, на Vercel – просто экспортируем
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, () => {
