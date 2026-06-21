@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "scripts": {
   "dev": "npx ts-node src/app.ts",
-  "postinstall": "prisma generate"
-
-  },
+  "postinstall": "prisma generate && prisma migrate deploy"
+},
   "dependencies": {
     "@prisma/client": "^5.14.0",
     "@vercel/node": "^3.2.29",
