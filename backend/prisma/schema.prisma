@@ -7,30 +7,20 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-model AssetCategory {
-  id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  currency  String
-  category  String
-
-  @@unique([userId, currency])
-}
-
 model User {
-  id             String   @id @default(uuid())
-  email          String   @unique
+  id             String           @id @default(uuid())
+  email          String           @unique
   passwordHash   String
-  jurisdiction   String   @default("RU")
-  baseCurrency   String   @default("RUB")
-  costMethod     String   @default("FIFO")
-  createdAt      DateTime @default(now())
+  jurisdiction   String           @default("RU")
+  baseCurrency   String           @default("RUB")
+  costMethod     String           @default("FIFO")
+  createdAt      DateTime         @default(now())
   apiKeys        ApiKey[]
   transactions   Transaction[]
   lots           Lot[]
   taxEvents      TaxEvent[]
   portfolioSnaps BalanceSnapshot[]
-  assetCategories  AssetCategory[]
+  assetCategories AssetCategory[]
 }
 
 model ApiKey {
@@ -40,9 +30,9 @@ model ApiKey {
   exchange        String
   encryptedKey    String
   encryptedSecret String
-  extra           Json?
+  extra           String?  // JSON храним как строку
   isActive        Boolean  @default(true)
-  lastSync        DateTime?   // ← добавлено
+  lastSync        DateTime?
 }
 
 model Transaction {
@@ -54,9 +44,9 @@ model Transaction {
   type          String
   baseCurrency  String
   quoteCurrency String
-  baseAmount    Decimal   @db.Decimal(30,12)
-  quoteAmount   Decimal?  @db.Decimal(30,12)
-  fee           Decimal?  @db.Decimal(30,12)
+  baseAmount    Float     // ← Decimal заменён на Float
+  quoteAmount   Float?
+  fee           Float?
   feeCurrency   String?
   timestamp     DateTime
   notes         String?
@@ -76,9 +66,9 @@ model Lot {
   currency        String
   openTransaction Transaction @relation("lotOpen", fields: [openTxId], references: [id])
   openTxId        String
-  totalAmount     Decimal     @db.Decimal(30,12)
-  remainingAmount Decimal     @db.Decimal(30,12)
-  costPerUnit     Decimal     @db.Decimal(30,12)
+  totalAmount     Float       // ← Float
+  remainingAmount Float       // ← Float
+  costPerUnit     Float       // ← Float
   acquiredAt      DateTime
   closed          Boolean     @default(false)
 }
@@ -91,13 +81,13 @@ model TaxEvent {
   eventType     String
   date          DateTime
   currency      String
-  proceeds      Decimal  @db.Decimal(30,12)
-  costBasis     Decimal  @db.Decimal(30,12)
-  gainLoss      Decimal  @db.Decimal(30,12)
+  proceeds      Float    // ← Float
+  costBasis     Float    // ← Float
+  gainLoss      Float    // ← Float
   holdingPeriod String?
-  taxRate       Decimal  @db.Decimal(5,2)
-  taxAmount     Decimal  @db.Decimal(30,12)
-  details       Json?
+  taxRate       Float    // ← Float
+  taxAmount     Float    // ← Float
+  details       String?  // JSON храним как строку
 }
 
 model BalanceSnapshot {
@@ -106,6 +96,16 @@ model BalanceSnapshot {
   userId    String
   date      DateTime
   currency  String
-  amount    Decimal  @db.Decimal(30,12)
-  costBasis Decimal  @db.Decimal(30,12)
+  amount    Float    // ← Float
+  costBasis Float    // ← Float
+}
+
+model AssetCategory {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  currency  String
+  category  String
+
+  @@unique([userId, currency])
 }
