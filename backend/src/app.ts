@@ -10,14 +10,11 @@ import portfolioRoutes from './portfolio/routes';
 import taxRoutes from './tax/routes';
 import historyRoutes from './portfolio/historyRoutes';
 import categoriesRoutes from './portfolio/categoriesRoutes';
-// import './queue/syncExchange'; // отключено для Vercel
+// import './queue/syncExchange'; // отключено
 
 const app = express();
 app.use(helmet());
-app.use(cors({
-  origin: 'https://crypto-tax-app-7p4g.vercel.app',
-  credentials: true,
-}));
+app.use(cors({ origin: '*' }));   // ← разрешаем все домены
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
