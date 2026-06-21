@@ -14,7 +14,8 @@ import categoriesRoutes from './portfolio/categoriesRoutes';
 
 const app = express();
 app.use(helmet());
-app.use(cors({ origin: '*' }));   // ← разрешаем все домены
+app.use(cors({ origin: '*' }));
+app.options('*', cors());   // явный ответ на предзапросы
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
