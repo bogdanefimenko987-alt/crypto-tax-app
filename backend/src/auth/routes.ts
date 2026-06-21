@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid'; // нужно будет установить
+import { v4 as uuidv4 } from 'uuid';
 import { users } from '../store';
 
 const router = Router();
@@ -16,7 +16,7 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = users.find(u => u.email === email);
+  const user = users.find((u: any) => u.email === email);
   if (!user || !await bcrypt.compare(password, user.passwordHash)) {
     return res.status(401).json({ error: 'Неверные учетные данные' });
   }

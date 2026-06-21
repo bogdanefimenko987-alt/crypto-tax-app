@@ -6,12 +6,12 @@ import { transactions } from '../store';
 const router = Router();
 router.use(authenticate);
 
-router.get('/', async (req: AuthRequest, res) => {
-  const userTxs = transactions.filter(tx => tx.userId === req.user!.id);
+router.get('/', (req: AuthRequest, res) => {
+  const userTxs = transactions.filter((tx: any) => tx.userId === req.user!.id);
   res.json(userTxs);
 });
 
-router.post('/manual', async (req: AuthRequest, res) => {
+router.post('/manual', (req: AuthRequest, res) => {
   const tx = {
     id: uuidv4(),
     userId: req.user!.id,
