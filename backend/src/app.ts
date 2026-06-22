@@ -1,7 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
-import express from 'express';
-import helmet from 'helmet';
+
 import authRoutes from './auth/routes';
 import transactionRoutes from './transactions/routes';
 // import './queue/syncExchange'; // отключено
@@ -25,8 +22,7 @@ app.use((req, res, next) => {
 });
 
 // Остальные middleware
-app.use(helmet());
-app.use(express.json());
+
 
 // Маршруты
 app.use('/api/auth', authRoutes),

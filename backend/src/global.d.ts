@@ -10,3 +10,4 @@ declare namespace NodeJS {
 }
 
 declare const Buffer: typeof import('buffer').Buffer;
+declare const process: NodeJS.Process;

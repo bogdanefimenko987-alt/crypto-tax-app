@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,7 +6,7 @@ import { users } from '../store';
 
 const router = Router();
 
-router.post('/register', async (req, res) => {
+router.post('/register', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const hash = await bcrypt.hash(password, 10);
   const user = { id: uuidv4(), email, passwordHash: hash };
@@ -14,7 +14,7 @@ router.post('/register', async (req, res) => {
   res.json({ id: user.id, email: user.email });
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const user = users.find((u: any) => u.email === email);
   if (!user || !await bcrypt.compare(password, user.passwordHash)) {
