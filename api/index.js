@@ -1,0 +1,10 @@
+{
+  "name": "crypto-tax-api",
+  "version": "1.0.0",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.0"
+  }
+}
