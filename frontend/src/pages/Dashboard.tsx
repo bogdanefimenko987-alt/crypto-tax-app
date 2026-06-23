@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import apiClient from '../api/client';
+import { PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
@@ -16,12 +19,10 @@ export default function Dashboard() {
     notes: '',
   });
 
-  // Получение портфеля
   const { data: portfolioData, isLoading } = useQuery('portfolio', () =>
     apiClient.get('/portfolio').then(res => res.data).catch(() => ({ holdings: {} }))
   );
 
-  // Мутация для добавления транзакции
   const addTx = useMutation(
     (tx: any) => apiClient.post('/transactions/manual', tx),
     {
@@ -49,44 +50,51 @@ export default function Dashboard() {
   if (isLoading) return <div className="p-4 text-center">Загрузка...</div>;
 
   const holdings = portfolioData?.holdings || {};
+  const pieData = Object.entries(holdings).map(([name, val]: any) => ({
+    name,
+    value: Number(val.amount) || 0,
+  }));
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-4">Дашборд</h1>
 
-      {/* Форма добавления */}
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <h2 className="text-lg font-semibold mb-2">Добавить транзакцию</h2>
-        <form onSubmit={handleSubmit} className="space-y-2">
-          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="border p-2 w-full">
-            <option value="BUY">Покупка</option>
-            <option value="SELL">Продажа</option>
-          </select>
-          <input placeholder="Валюта (BTC)" value={form.baseCurrency} onChange={(e) => setForm({ ...form, baseCurrency: e.target.value })} className="border p-2 w-full" />
-          <input placeholder="Валюта расчёта (USDT)" value={form.quoteCurrency} onChange={(e) => setForm({ ...form, quoteCurrency: e.target.value })} className="border p-2 w-full" />
-          <input placeholder="Количество" type="number" step="any" value={form.baseAmount} onChange={(e) => setForm({ ...form, baseAmount: e.target.value })} className="border p-2 w-full" />
-          <input placeholder="Сумма" type="number" step="any" value={form.quoteAmount} onChange={(e) => setForm({ ...form, quoteAmount: e.target.value })} className="border p-2 w-full" />
-          <input placeholder="Комиссия" type="number" step="any" value={form.fee} onChange={(e) => setForm({ ...form, fee: e.target.value })} className="border p-2 w-full" />
-          <input type="datetime-local" value={form.timestamp} onChange={(e) => setForm({ ...form, timestamp: e.target.value })} className="border p-2 w-full" />
-          <button type="submit" className="w-full bg-blue-600 text-white p-2 rounded">Добавить</button>
-        </form>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Круговая диаграмма */}
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-lg font-semibold mb-2">Структура портфеля</h2>
+          {pieData.length === 0 ? (
+            <p>Нет активов</p>
+          ) : (
+            <PieChart width={400} height={300}>
+              <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}>
+                {pieData.map((_, index) => (
+                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          )}
+        </div>
 
-      {/* Текущие активы (список) */}
-      <div className="bg-white p-4 rounded shadow">
-        <h2 className="text-lg font-semibold mb-2">Мои активы</h2>
-        {Object.keys(holdings).length === 0 ? (
-          <p>Нет активов</p>
-        ) : (
-          <ul>
-            {Object.entries(holdings).map(([currency, data]: any) => (
-              <li key={currency} className="flex justify-between border-b py-1">
-                <span>{currency}</span>
-                <span>{Number(data.amount).toFixed(8)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* Форма добавления */}
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-lg font-semibold mb-2">Добавить транзакцию</h2>
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="border p-2 w-full">
+              <option value="BUY">Покупка</option>
+              <option value="SELL">Продажа</option>
+            </select>
+            <input placeholder="Валюта (BTC)" value={form.baseCurrency} onChange={(e) => setForm({ ...form, baseCurrency: e.target.value })} className="border p-2 w-full" />
+            <input placeholder="Валюта расчёта (USDT)" value={form.quoteCurrency} onChange={(e) => setForm({ ...form, quoteCurrency: e.target.value })} className="border p-2 w-full" />
+            <input placeholder="Количество" type="number" step="any" value={form.baseAmount} onChange={(e) => setForm({ ...form, baseAmount: e.target.value })} className="border p-2 w-full" />
+            <input placeholder="Сумма" type="number" step="any" value={form.quoteAmount} onChange={(e) => setForm({ ...form, quoteAmount: e.target.value })} className="border p-2 w-full" />
+            <input placeholder="Комиссия" type="number" step="any" value={form.fee} onChange={(e) => setForm({ ...form, fee: e.target.value })} className="border p-2 w-full" />
+            <input type="datetime-local" value={form.timestamp} onChange={(e) => setForm({ ...form, timestamp: e.target.value })} className="border p-2 w-full" />
+            <button type="submit" className="w-full bg-blue-600 text-white p-2 rounded">Добавить</button>
+          </form>
+        </div>
       </div>
     </div>
   );
