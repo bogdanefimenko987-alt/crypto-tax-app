@@ -23,12 +23,13 @@ export default function Dashboard() {
   });
   const [taxYear, setTaxYear] = useState(new Date().getFullYear());
 
+  // Запросы с защитой от ошибок
   const { data: portfolioData, isLoading } = useQuery('portfolio', () =>
     apiClient.get('/portfolio').then(res => res.data).catch(() => ({ holdings: {} }))
   );
-  const { data: categories } = useQuery('categories', getCategories);
+  const { data: categories } = useQuery('categories', getCategories, { onError: () => [] });
   const { data: taxReport } = useQuery(['tax', taxYear], () =>
-    apiClient.get(`/tax/report/${taxYear}`).then(res => res.data)
+    apiClient.get(`/tax/report/${taxYear}`).then(res => res.data).catch(() => null)
   );
 
   const addTx = useMutation(
@@ -57,7 +58,7 @@ export default function Dashboard() {
   };
 
   const handleSetCategory = (currency: string) => {
-    const cat = prompt(`Введите категорию для ${currency} (DeFi, Layer1, Stablecoin, Meme...)`);
+    const cat = prompt(`Введите категорию для ${currency} (DeFi, Layer1, Stablecoin...)`);
     if (cat) {
       setCategory(currency, cat).then(() => queryClient.invalidateQueries('categories'));
     }
@@ -66,9 +67,9 @@ export default function Dashboard() {
   if (isLoading) return <div className="p-4 text-center">Загрузка...</div>;
 
   const holdings = portfolioData?.holdings || {};
-  const pieData = Object.entries(holdings).map(([name, value]: any) => ({
+  const pieData = Object.entries(holdings).map(([name, val]: any) => ({
     name,
-    value: Number(value.amount) || 0,
+    value: Number(val.amount) || 0,
   }));
 
   return (
@@ -111,7 +112,6 @@ export default function Dashboard() {
       </div>
 
       <BalanceChart />
-
       <PnLTable />
 
       <div className="bg-white p-4 rounded shadow mb-6">
