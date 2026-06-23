@@ -11,7 +11,6 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-// Генератор стабильного цвета по названию валюты
 const stringToColor = (str: string) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -31,7 +30,7 @@ export default function BalanceChart() {
   const currencies = Object.keys(data[0]).filter((key) => key !== 'date');
 
   return (
-    <div className="bg-white p-4 rounded shadow">
+    <div className="bg-white p-4 rounded shadow mb-6">
       <h2 className="text-lg font-semibold mb-2">Исторический баланс</h2>
       <ResponsiveContainer width="100%" height={350}>
         <LineChart data={data}>
