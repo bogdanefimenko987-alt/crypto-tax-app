@@ -1,9 +1,9 @@
-import { useAuth } from '../hooks/useAuth'
-import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth';
+import { Link, useNavigate } from 'react-router-dom';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { token, logout } = useAuth()
-  const navigate = useNavigate()
+  const { token, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -14,7 +14,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <div>
           {token ? (
-            <button onClick={() => { logout(); navigate('/login') }} className="text-red-500">
+            <button
+              onClick={() => { logout(); navigate('/login'); }}
+              className="text-red-500"
+            >
               Выйти
             </button>
           ) : (
@@ -24,5 +27,5 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </nav>
       <main className="p-4">{children}</main>
     </div>
-  )
+  );
 }

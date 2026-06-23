@@ -1,51 +1,25 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import apiClient from '../api/client';
+import { useState, useEffect } from 'react';
 
-interface AuthContextType {
-  user: any;
-  token: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-}
+export function useAuth() {
+  const [token, setToken] = useState<string | null>(null);
 
-const AuthContext = createContext<AuthContextType>(null!);
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  useEffect(() => {
+    const stored = localStorage.getItem('token');
+    if (stored) setToken(stored);
+  }, []);
 
   const login = async (email: string, password: string) => {
-    const { data } = await apiClient.post('/auth/login', { email, password });
-    localStorage.setItem('token', data.token);
-    setToken(data.token);
-    setUser(data.user);
+    // ничего не делаем — реальный логин в Login.tsx сам сохранит токен
   };
 
   const register = async (email: string, password: string) => {
-    await apiClient.post('/auth/register', { email, password });
-    await login(email, password);
+    // аналогично
   };
 
   const logout = () => {
     localStorage.removeItem('token');
     setToken(null);
-    setUser(null);
   };
 
-  useEffect(() => {
-    if (token) {
-      // загрузка профиля при желании
-    }
-  }, [token]);
-
-  return (
-    <AuthContext.Provider value={{ user, token, login, register, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
+  return { token, login, register, logout };
 }
