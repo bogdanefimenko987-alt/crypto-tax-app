@@ -27,7 +27,11 @@ app.post('/api/auth/login', (req, res) => {
     user = { id: uuidv4(), email };
     users.push(user);
   }
-  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET || 'defaultsecret', { expiresIn: '1d' });
+  const token = jwt.sign(
+    { userId: user.id, email: user.email },
+    process.env.JWT_SECRET || 'defaultsecret',
+    { expiresIn: '1d' }
+  );
   res.json({ token, user: { id: user.id, email: user.email } });
 });
 
@@ -36,7 +40,11 @@ app.post('/api/auth/register', (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
   const user = { id: uuidv4(), email };
   users.push(user);
-  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET || 'defaultsecret', { expiresIn: '1d' });
+  const token = jwt.sign(
+    { userId: user.id, email: user.email },
+    process.env.JWT_SECRET || 'defaultsecret',
+    { expiresIn: '1d' }
+  );
   res.json({ token, user: { id: user.id, email: user.email } });
 });
 
@@ -88,22 +96,20 @@ app.get('/api/portfolio', authenticate, (req, res) => {
   for (const tx of userTxs) {
     const cur = tx.baseCurrency;
     if (!holdings[cur]) holdings[cur] = { amount: 0, costBasis: 0 };
-    // BUY / SWAP_IN – положительное количество, SELL / SWAP_OUT – отрицательное
     const sign = (tx.type === 'BUY' || tx.type === 'SWAP_IN') ? 1 : -1;
     holdings[cur].amount += sign * tx.baseAmount;
     if (tx.type === 'BUY' || tx.type === 'SWAP_IN') {
-      holdings[cur].costBasis += tx.quoteAmount; // упрощённо: стоимость в валюте расчёта
+      holdings[cur].costBasis += tx.quoteAmount;
     }
-    // при продаже себестоимость не меняем (для упрощения)
   }
-  // Оставляем только валюты с ненулевым остатком
+  // Удаляем валюты с нулевым остатком
   for (const cur of Object.keys(holdings)) {
     if (holdings[cur].amount <= 0) delete holdings[cur];
   }
   res.json({ holdings });
 });
 
-// Заглушки для остальных эндпоинтов (как прежде)
+// Заглушки для остальных эндпоинтов (чтобы не было 404)
 app.get('/api/portfolio/history', authenticate, (req, res) => res.json([]));
 app.get('/api/portfolio/pnl', authenticate, (req, res) => res.json([]));
 app.get('/api/portfolio/categories', authenticate, (req, res) => res.json([]));

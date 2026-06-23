@@ -19,10 +19,12 @@ export default function Dashboard() {
     notes: '',
   });
 
+  // Получение портфеля
   const { data: portfolioData, isLoading } = useQuery('portfolio', () =>
     apiClient.get('/portfolio').then(res => res.data)
   );
 
+  // Мутация для добавления транзакции
   const addTx = useMutation(
     (tx: any) => apiClient.post('/transactions/manual', tx),
     {
@@ -59,6 +61,7 @@ export default function Dashboard() {
     <div>
       <h1 className="text-2xl font-bold mb-4">Дашборд</h1>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Круговая диаграмма портфеля */}
         <div className="bg-white p-4 rounded shadow">
           <h2 className="text-lg font-semibold mb-2">Структура портфеля</h2>
           {pieData.length === 0 ? (
