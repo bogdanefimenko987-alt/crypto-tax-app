@@ -15,49 +15,25 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 const users = [];
+const transactions = [];
 const categories = {};
 
-// Демо-транзакции
-const transactions = [
-  {
-    id: uuidv4(), userId: 'demo-user', type: 'BUY',
-    baseCurrency: 'BTC', quoteCurrency: 'USDT',
-    baseAmount: 0.5, quoteAmount: 25000,
-    fee: 10, feeCurrency: 'USDT',
-    timestamp: '2026-01-15T10:00:00.000Z', notes: 'Демо-покупка',
-    createdAt: '2026-01-15T10:00:00.000Z'
-  },
-  {
-    id: uuidv4(), userId: 'demo-user', type: 'BUY',
-    baseCurrency: 'ETH', quoteCurrency: 'USDT',
-    baseAmount: 2, quoteAmount: 4000,
-    fee: 5, feeCurrency: 'USDT',
-    timestamp: '2026-02-10T12:00:00.000Z', notes: 'Демо-покупка',
-    createdAt: '2026-02-10T12:00:00.000Z'
-  },
-  {
-    id: uuidv4(), userId: 'demo-user', type: 'SELL',
-    baseCurrency: 'BTC', quoteCurrency: 'USDT',
-    baseAmount: 0.2, quoteAmount: 12000,
-    fee: 3, feeCurrency: 'USDT',
-    timestamp: '2026-03-20T14:00:00.000Z', notes: 'Демо-продажа',
-    createdAt: '2026-03-20T14:00:00.000Z'
-  }
-];
-
-// --- Auth (демо-режим – все пользователи получают demo-user) ---
+// --- Auth (привязка к userId) ---
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
-  const token = jwt.sign({ userId: 'demo-user', email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
-  res.json({ token, user: { id: 'demo-user', email } });
+  let user = users.find(u => u.email === email);
+  if (!user) { user = { id: uuidv4(), email }; users.push(user); }
+  const token = jwt.sign({ userId: user.id, email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
+  res.json({ token, user: { id: user.id, email: user.email } });
 });
 
 app.post('/api/auth/register', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
-  const token = jwt.sign({ userId: 'demo-user', email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
-  res.json({ token, user: { id: 'demo-user', email } });
+  const user = { id: uuidv4(), email }; users.push(user);
+  const token = jwt.sign({ userId: user.id, email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
+  res.json({ token, user: { id: user.id, email: user.email } });
 });
 
 // --- Middleware ---
@@ -200,9 +176,10 @@ app.get('/api/tax/report/:year/csv', auth, (req, res) => {
 
 // PDF (заглушка)
 app.get('/api/tax/report/:year/pdf', auth, (req, res) => {
+  const text = `PDF отчёт за ${req.params.year} год. Скачайте CSV.`;
   res.header('Content-Type', 'application/pdf');
   res.attachment(`tax-report-${req.params.year}.pdf`);
-  res.send('PDF будет доступен позже');
+  res.send(Buffer.from(text, 'utf-8'));
 });
 
 app.get('/api/tax/declaration/:year', auth, (req, res) => {
