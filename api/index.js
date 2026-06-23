@@ -4,7 +4,6 @@ const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 
-// CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -17,175 +16,134 @@ app.use(express.json());
 
 const users = [];
 const transactions = [];
+const categories = {};
 
-// ─── Auth (демо) ───
+// --- Auth ---
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
   let user = users.find(u => u.email === email);
-  if (!user) {
-    user = { id: uuidv4(), email };
-    users.push(user);
-  }
-  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET || 'defaultsecret', { expiresIn: '1d' });
+  if (!user) { user = { id: uuidv4(), email }; users.push(user); }
+  const token = jwt.sign({ userId: user.id, email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
   res.json({ token, user: { id: user.id, email: user.email } });
 });
 
 app.post('/api/auth/register', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
-  const user = { id: uuidv4(), email };
-  users.push(user);
-  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET || 'defaultsecret', { expiresIn: '1d' });
+  const user = { id: uuidv4(), email }; users.push(user);
+  const token = jwt.sign({ userId: user.id, email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
   res.json({ token, user: { id: user.id, email: user.email } });
 });
 
-// ─── Middleware ───
-function authenticate(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
-    try {
-      const payload = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret');
-      req.userId = payload.userId;
-    } catch (err) {}
+// --- Middleware ---
+function auth(req, res, next) {
+  const h = req.headers.authorization;
+  if (h && h.startsWith('Bearer ')) {
+    try { req.userId = jwt.verify(h.split(' ')[1], process.env.JWT_SECRET || 'default').userId; } catch {}
   }
   next();
 }
 
-// ─── Transactions ───
-app.get('/api/transactions', authenticate, (req, res) => {
-  if (!req.userId) return res.json([]);
-  res.json(transactions.filter(tx => tx.userId === req.userId));
+// --- Transactions ---
+app.get('/api/transactions', auth, (req, res) => {
+  res.json(req.userId ? transactions.filter(t => t.userId === req.userId) : []);
 });
-
-app.post('/api/transactions/manual', authenticate, (req, res) => {
+app.post('/api/transactions/manual', auth, (req, res) => {
   if (!req.userId) return res.status(401).json({ error: 'Требуется авторизация' });
   const { type, baseCurrency, quoteCurrency, baseAmount, quoteAmount, fee, feeCurrency, timestamp, notes } = req.body;
-  const tx = {
-    id: uuidv4(),
-    userId: req.userId,
-    type,
-    baseCurrency,
-    quoteCurrency,
-    baseAmount: Number(baseAmount),
-    quoteAmount: Number(quoteAmount) || 0,
-    fee: Number(fee) || 0,
-    feeCurrency: feeCurrency || null,
+  const tx = { id: uuidv4(), userId: req.userId, type, baseCurrency, quoteCurrency,
+    baseAmount: Number(baseAmount), quoteAmount: Number(quoteAmount) || 0,
+    fee: Number(fee) || 0, feeCurrency: feeCurrency || null,
     timestamp: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
-    notes: notes || '',
-    createdAt: new Date().toISOString(),
-  };
+    notes: notes || '', createdAt: new Date().toISOString() };
   transactions.push(tx);
   res.json(tx);
 });
 
-// ─── Portfolio ───
-app.get('/api/portfolio', authenticate, (req, res) => {
+// --- Portfolio ---
+app.get('/api/portfolio', auth, (req, res) => {
   if (!req.userId) return res.json({ holdings: {} });
-  const userTxs = transactions.filter(tx => tx.userId === req.userId);
-  const holdings = {};
-  for (const tx of userTxs) {
-    const cur = tx.baseCurrency;
-    if (!holdings[cur]) holdings[cur] = { amount: 0, costBasis: 0 };
-    const sign = (tx.type === 'BUY' || tx.type === 'SWAP_IN') ? 1 : -1;
-    holdings[cur].amount += sign * tx.baseAmount;
-    if (tx.type === 'BUY' || tx.type === 'SWAP_IN') holdings[cur].costBasis += tx.quoteAmount;
+  const txs = transactions.filter(t => t.userId === req.userId);
+  const h = {};
+  for (const t of txs) {
+    const c = t.baseCurrency;
+    if (!h[c]) h[c] = { amount: 0, costBasis: 0 };
+    const sign = (t.type === 'BUY' || t.type === 'SWAP_IN') ? 1 : -1;
+    h[c].amount += sign * t.baseAmount;
+    if (t.type === 'BUY' || t.type === 'SWAP_IN') h[c].costBasis += t.quoteAmount;
   }
-  for (const cur of Object.keys(holdings)) {
-    if (holdings[cur].amount <= 0) delete holdings[cur];
-  }
-  res.json({ holdings });
+  Object.keys(h).forEach(c => { if (h[c].amount <= 0) delete h[c]; });
+  res.json({ holdings: h });
 });
 
-// ─── Portfolio History ───
-app.get('/api/portfolio/history', authenticate, (req, res) => {
+// --- History ---
+app.get('/api/portfolio/history', auth, (req, res) => {
   if (!req.userId) return res.json([]);
-  const userTxs = transactions.filter(tx => tx.userId === req.userId);
-  userTxs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const balances = {};
-  const history = [];
-  for (const tx of userTxs) {
-    const dateKey = new Date(tx.timestamp).toISOString().slice(0, 10);
-    if (history.length === 0 || history[history.length - 1].date !== dateKey) {
-      history.push({ date: dateKey });
-    }
-    const cur = tx.baseCurrency;
-    const sign = (tx.type === 'BUY' || tx.type === 'SWAP_IN') ? 1 : -1;
-    balances[cur] = (balances[cur] || 0) + sign * tx.baseAmount;
-    const last = history[history.length - 1];
-    for (const [c, bal] of Object.entries(balances)) {
-      last[c] = Number(bal.toFixed(8));
-    }
+  const txs = transactions.filter(t => t.userId === req.userId).sort((a,b) => new Date(a.timestamp)-new Date(b.timestamp));
+  const bal = {}, hist = [];
+  for (const t of txs) {
+    const dk = new Date(t.timestamp).toISOString().slice(0,10);
+    if (!hist.length || hist[hist.length-1].date !== dk) hist.push({ date: dk });
+    const sign = (t.type === 'BUY' || t.type === 'SWAP_IN') ? 1 : -1;
+    bal[t.baseCurrency] = (bal[t.baseCurrency] || 0) + sign * t.baseAmount;
+    const last = hist[hist.length-1];
+    for (const [c,v] of Object.entries(bal)) last[c] = Number(v.toFixed(8));
   }
-  res.json(history);
+  res.json(hist);
 });
 
-// ─── PnL ───
-app.get('/api/portfolio/pnl', authenticate, (req, res) => {
+// --- PnL ---
+app.get('/api/portfolio/pnl', auth, (req, res) => {
   if (!req.userId) return res.json([]);
-  // Упрощённый расчёт PnL на основе продаж
-  const sells = transactions.filter(tx => tx.userId === req.userId && (tx.type === 'SELL' || tx.type === 'SWAP_OUT'));
+  const sells = transactions.filter(t => t.userId === req.userId && (t.type==='SELL'||t.type==='SWAP_OUT'));
   const pnl = {};
-  for (const tx of sells) {
-    const cur = tx.baseCurrency;
-    if (!pnl[cur]) pnl[cur] = { proceeds: 0, costBasis: 0, gainLoss: 0 };
-    pnl[cur].proceeds += tx.quoteAmount;
-    // Для себестоимости ищем соответствующую покупку (упрощённо: делим общую себестоимость на количество)
-    const buys = transactions.filter(t => t.userId === req.userId && t.baseCurrency === cur && (t.type === 'BUY' || t.type === 'SWAP_IN'));
-    const totalBought = buys.reduce((sum, b) => sum + b.baseAmount, 0);
-    const totalCost = buys.reduce((sum, b) => sum + b.quoteAmount, 0);
-    const avgCost = totalBought > 0 ? totalCost / totalBought : 0;
-    pnl[cur].costBasis += avgCost * tx.baseAmount;
-    pnl[cur].gainLoss += tx.quoteAmount - avgCost * tx.baseAmount;
+  for (const t of sells) {
+    const c = t.baseCurrency;
+    if (!pnl[c]) pnl[c] = { proceeds: 0, costBasis: 0, gainLoss: 0 };
+    pnl[c].proceeds += t.quoteAmount;
+    const buys = transactions.filter(b => b.userId===req.userId && b.baseCurrency===c && (b.type==='BUY'||b.type==='SWAP_IN'));
+    const totalBought = buys.reduce((s,b)=>s+b.baseAmount,0);
+    const totalCost = buys.reduce((s,b)=>s+b.quoteAmount,0);
+    const avgCost = totalBought ? totalCost/totalBought : 0;
+    pnl[c].costBasis += avgCost * t.baseAmount;
+    pnl[c].gainLoss += t.quoteAmount - avgCost * t.baseAmount;
   }
-  res.json(Object.entries(pnl).map(([currency, data]) => ({ currency, ...data })));
+  res.json(Object.entries(pnl).map(([cur,data])=>({currency:cur,...data})));
 });
 
-// ─── Categories ───
-const categories = {};
-app.get('/api/portfolio/categories', authenticate, (req, res) => {
-  res.json(Object.entries(categories).map(([currency, category]) => ({ id: currency, userId: req.userId, currency, category })));
-});
-app.post('/api/portfolio/categories', authenticate, (req, res) => {
+// --- Categories ---
+app.get('/api/portfolio/categories', auth, (req, res) => res.json(Object.entries(categories).map(([c,cat])=>({id:c, currency:c, category:cat}))));
+app.post('/api/portfolio/categories', auth, (req, res) => {
   const { currency, category } = req.body;
   categories[currency] = category;
   res.json({ success: true });
 });
 
-// ─── Tax ───
-app.get('/api/tax/report/:year', authenticate, (req, res) => {
-  const sells = transactions.filter(tx => tx.userId === req.userId && (tx.type === 'SELL' || tx.type === 'SWAP_OUT'));
-  const taxRate = 0.13;
-  const events = sells.map(tx => {
-    const buys = transactions.filter(t => t.userId === req.userId && t.baseCurrency === tx.baseCurrency && (t.type === 'BUY' || t.type === 'SWAP_IN'));
-    const totalBought = buys.reduce((s, b) => s + b.baseAmount, 0);
-    const totalCost = buys.reduce((s, b) => s + b.quoteAmount, 0);
-    const avgCost = totalBought > 0 ? totalCost / totalBought : 0;
-    const costBasis = avgCost * tx.baseAmount;
-    const gain = tx.quoteAmount - costBasis;
-    return {
-      date: tx.timestamp,
-      currency: tx.baseCurrency,
-      proceeds: tx.quoteAmount,
-      costBasis,
-      gainLoss: gain,
-      taxRate,
-      taxAmount: gain * taxRate,
-    };
+// --- Tax ---
+app.get('/api/tax/report/:year', auth, (req, res) => {
+  const sells = transactions.filter(t => t.userId === req.userId && (t.type==='SELL'||t.type==='SWAP_OUT'));
+  const rate = 0.13;
+  const events = sells.map(t => {
+    const buys = transactions.filter(b => b.userId===req.userId && b.baseCurrency===t.baseCurrency && (b.type==='BUY'||b.type==='SWAP_IN'));
+    const totalBought = buys.reduce((s,b)=>s+b.baseAmount,0);
+    const totalCost = buys.reduce((s,b)=>s+b.quoteAmount,0);
+    const avgCost = totalBought ? totalCost/totalBought : 0;
+    const cost = avgCost * t.baseAmount;
+    const gain = t.quoteAmount - cost;
+    return { date: t.timestamp, currency: t.baseCurrency, proceeds: t.quoteAmount, costBasis: cost, gainLoss: gain, taxRate: rate, taxAmount: gain * rate };
   });
-  const totalProceeds = events.reduce((s, e) => s + e.proceeds, 0);
-  const totalCost = events.reduce((s, e) => s + e.costBasis, 0);
-  const totalGain = totalProceeds - totalCost;
-  const totalTax = totalGain * taxRate;
-  res.json({ events, summary: { totalProceeds, totalCost, totalGain, totalTax } });
+  const tp = events.reduce((s,e)=>s+e.proceeds,0);
+  const tc = events.reduce((s,e)=>s+e.costBasis,0);
+  const tg = tp - tc;
+  res.json({ events, summary: { totalProceeds: tp, totalCost: tc, totalGain: tg, totalTax: tg * rate } });
 });
-app.get('/api/tax/report/:year/csv', (req, res) => res.header('Content-Type', 'text/csv').send('date,currency,proceeds,costBasis,gainLoss,taxRate,taxAmount'));
-app.get('/api/tax/report/:year/pdf', (req, res) => res.json({}));
-app.get('/api/tax/declaration/:year', (req, res) => res.json({ totalIncome: 0, totalLoss: 0, totalTax: 0 }));
+app.get('/api/tax/report/:year/csv', auth, (req, res) => res.header('Content-Type','text/csv').send('date,currency,proceeds,costBasis,gainLoss,taxRate,taxAmount'));
+app.get('/api/tax/report/:year/pdf', auth, (req, res) => res.json({}));
+app.get('/api/tax/declaration/:year', auth, (req, res) => res.json({ totalIncome:0, totalLoss:0, totalTax:0 }));
 
-// ─── Exchanges ───
-app.post('/api/exchanges/connect', authenticate, (req, res) => res.json({ success: true }));
-app.get('/api/exchanges/list', authenticate, (req, res) => res.json([]));
+// --- Exchanges ---
+app.post('/api/exchanges/connect', auth, (req, res) => res.json({ success: true }));
+app.get('/api/exchanges/list', auth, (req, res) => res.json([]));
 
 module.exports = app;
