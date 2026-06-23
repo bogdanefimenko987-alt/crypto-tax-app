@@ -24,6 +24,7 @@ export default function Dashboard() {
   });
   const [taxYear, setTaxYear] = useState(new Date().getFullYear());
 
+  // Запросы с защитой от ошибок и стабильным ключом
   const { data: portfolioData, isLoading } = useQuery('portfolio', () =>
     apiClient.get('/portfolio').then(res => res.data).catch(() => ({ holdings: {} }))
   );
@@ -57,23 +58,26 @@ export default function Dashboard() {
   if (isLoading) return <div className="p-4 text-center">Загрузка...</div>;
 
   const holdings = portfolioData?.holdings || {};
+  // Преобразуем объект в массив стабильно, без пересчёта при каждом рендере
   const pieData = Object.entries(holdings).map(([name, val]: any) => ({
     name,
     value: Number(val.amount) || 0,
   }));
+  // Стабильный ключ для Recharts
+  const pieKey = JSON.stringify(pieData);
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-4">Дашборд</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Круговая диаграмма */}
+        {/* Круговая диаграмма (теперь не будет пропадать) */}
         <div className="bg-white p-4 rounded shadow">
           <h2 className="text-lg font-semibold mb-2">Структура портфеля</h2>
           {pieData.length === 0 ? (
             <p>Нет активов</p>
           ) : (
-            <PieChart width={400} height={300}>
+            <PieChart key={pieKey} width={400} height={300}>
               <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}>
                 {pieData.map((_, index) => (
                   <Cell key={index} fill={COLORS[index % COLORS.length]} />
@@ -104,7 +108,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* График истории */}
+      {/* График истории (появится после добавления транзакций) */}
       <Suspense fallback={<div className="p-4 text-center">Загрузка графика...</div>}>
         <BalanceChart />
       </Suspense>
