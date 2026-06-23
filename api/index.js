@@ -1,5 +1,4 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 
@@ -16,52 +15,49 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-const users = [];
-const transactions = [];
-
-// ─── Auth (демо: авторегистрация при логине) ───
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const hash = await bcrypt.hash(password, 10);
-    const user = { id: uuidv4(), email, passwordHash: hash };
-    users.push(user);
-    res.json({ id: user.id, email: user.email });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+// Демо-режим: любой логин успешен
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email и пароль обязательны' });
   }
+
+  const user = {
+    id: uuidv4(),
+    email: email,
+  };
+
+  const token = jwt.sign(
+    { userId: user.id, email: user.email },
+    process.env.JWT_SECRET || 'defaultsecret',
+    { expiresIn: '1d' }
+  );
+
+  res.json({ token, user });
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    let user = users.find(u => u.email === email);
-
-    // Если пользователь не найден, создаём его автоматически
-    if (!user) {
-      const hash = await bcrypt.hash(password, 10);
-      user = { id: uuidv4(), email, passwordHash: hash };
-      users.push(user);
-    }
-
-    // Проверяем пароль (для только что созданного он всегда подойдёт)
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ error: 'Неверный пароль' });
-    }
-
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'defaultsecret',
-      { expiresIn: '1d' }
-    );
-    res.json({ token, user: { id: user.id, email: user.email } });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+// Регистрация тоже просто возвращает токен
+app.post('/api/auth/register', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email и пароль обязательны' });
   }
+
+  const user = {
+    id: uuidv4(),
+    email: email,
+  };
+
+  const token = jwt.sign(
+    { userId: user.id, email: user.email },
+    process.env.JWT_SECRET || 'defaultsecret',
+    { expiresIn: '1d' }
+  );
+
+  res.json({ token, user });
 });
 
-// ─── Middleware (извлекает userId, но не блокирует) ───
+// Middleware
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -74,25 +70,10 @@ function authenticate(req, res, next) {
   next();
 }
 
-// ─── Transactions ───
-app.get('/api/transactions', authenticate, (req, res) => {
-  if (!req.userId) return res.json([]);
-  res.json(transactions.filter(tx => tx.userId === req.userId));
-});
+// Заглушки
+app.get('/api/transactions', authenticate, (req, res) => res.json([]));
+app.post('/api/transactions/manual', authenticate, (req, res) => res.json({}));
 
-app.post('/api/transactions/manual', authenticate, (req, res) => {
-  if (!req.userId) return res.status(401).json({ error: 'Требуется авторизация' });
-  const tx = {
-    id: uuidv4(),
-    userId: req.userId,
-    ...req.body,
-    createdAt: new Date().toISOString(),
-  };
-  transactions.push(tx);
-  res.json(tx);
-});
-
-// ─── Portfolio / Tax / Categories (заглушки) ───
 app.get('/api/portfolio', authenticate, (req, res) => res.json({ holdings: {} }));
 app.get('/api/portfolio/history', authenticate, (req, res) => res.json([]));
 app.get('/api/portfolio/pnl', authenticate, (req, res) => res.json([]));
@@ -104,7 +85,7 @@ app.get('/api/tax/report/:year/csv', authenticate, (req, res) => res.header('Con
 app.get('/api/tax/report/:year/pdf', authenticate, (req, res) => res.json({ events: [], summary: {} }));
 app.get('/api/tax/declaration/:year', authenticate, (req, res) => res.json({ year: req.params.year, totalIncome: 0, totalLoss: 0, taxableBase: 0, totalTax: 0, eventsCount: 0 }));
 
-app.post('/api/exchanges/connect', authenticate, (req, res) => res.json({ success: true, message: 'Биржа подключена (заглушка)' }));
+app.post('/api/exchanges/connect', authenticate, (req, res) => res.json({ success: true }));
 app.get('/api/exchanges/list', authenticate, (req, res) => res.json([]));
 
 module.exports = app;
