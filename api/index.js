@@ -15,25 +15,49 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 const users = [];
-const transactions = [];
-const categories = {};   // { валюта: категория }
+const categories = {};
 
-// --- Auth ---
+// Демо-транзакции
+const transactions = [
+  {
+    id: uuidv4(), userId: 'demo-user', type: 'BUY',
+    baseCurrency: 'BTC', quoteCurrency: 'USDT',
+    baseAmount: 0.5, quoteAmount: 25000,
+    fee: 10, feeCurrency: 'USDT',
+    timestamp: '2026-01-15T10:00:00.000Z', notes: 'Демо-покупка',
+    createdAt: '2026-01-15T10:00:00.000Z'
+  },
+  {
+    id: uuidv4(), userId: 'demo-user', type: 'BUY',
+    baseCurrency: 'ETH', quoteCurrency: 'USDT',
+    baseAmount: 2, quoteAmount: 4000,
+    fee: 5, feeCurrency: 'USDT',
+    timestamp: '2026-02-10T12:00:00.000Z', notes: 'Демо-покупка',
+    createdAt: '2026-02-10T12:00:00.000Z'
+  },
+  {
+    id: uuidv4(), userId: 'demo-user', type: 'SELL',
+    baseCurrency: 'BTC', quoteCurrency: 'USDT',
+    baseAmount: 0.2, quoteAmount: 12000,
+    fee: 3, feeCurrency: 'USDT',
+    timestamp: '2026-03-20T14:00:00.000Z', notes: 'Демо-продажа',
+    createdAt: '2026-03-20T14:00:00.000Z'
+  }
+];
+
+// --- Auth (демо-режим – все пользователи получают demo-user) ---
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
-  let user = users.find(u => u.email === email);
-  if (!user) { user = { id: uuidv4(), email }; users.push(user); }
-  const token = jwt.sign({ userId: user.id, email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
-  res.json({ token, user: { id: user.id, email: user.email } });
+  const token = jwt.sign({ userId: 'demo-user', email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
+  res.json({ token, user: { id: 'demo-user', email } });
 });
 
 app.post('/api/auth/register', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email и пароль обязательны' });
-  const user = { id: uuidv4(), email }; users.push(user);
-  const token = jwt.sign({ userId: user.id, email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
-  res.json({ token, user: { id: user.id, email: user.email } });
+  const token = jwt.sign({ userId: 'demo-user', email }, process.env.JWT_SECRET || 'default', { expiresIn: '1d' });
+  res.json({ token, user: { id: 'demo-user', email } });
 });
 
 // --- Middleware ---
@@ -115,20 +139,15 @@ app.get('/api/portfolio/pnl', auth, (req, res) => {
   res.json(Object.entries(pnl).map(([cur, data]) => ({ currency: cur, ...data })));
 });
 
-// --- Categories (исправлено – храним словарь) ---
+// --- Categories ---
 app.get('/api/portfolio/categories', auth, (req, res) => {
   res.json(Object.keys(categories).map(currency => ({
-    id: currency,
-    userId: req.userId,
-    currency,
-    category: categories[currency]
+    id: currency, userId: req.userId, currency, category: categories[currency]
   })));
 });
 app.post('/api/portfolio/categories', auth, (req, res) => {
   const { currency, category } = req.body;
-  if (currency && category) {
-    categories[currency] = category;
-  }
+  if (currency && category) categories[currency] = category;
   res.json({ success: true });
 });
 
@@ -143,26 +162,15 @@ app.get('/api/tax/report/:year', auth, (req, res) => {
     const avgCost = totalBought ? totalCost / totalBought : 0;
     const cost = avgCost * t.baseAmount;
     const gain = t.quoteAmount - cost;
-    return {
-      date: t.timestamp,
-      currency: t.baseCurrency,
-      proceeds: t.quoteAmount,
-      costBasis: cost,
-      gainLoss: gain,
-      taxRate: rate,
-      taxAmount: gain * rate
-    };
+    return { date: t.timestamp, currency: t.baseCurrency, proceeds: t.quoteAmount, costBasis: cost, gainLoss: gain, taxRate: rate, taxAmount: gain * rate };
   });
-  const totalProceeds = events.reduce((s, e) => s + e.proceeds, 0);
-  const totalCost = events.reduce((s, e) => s + e.costBasis, 0);
-  const totalGain = totalProceeds - totalCost;
-  res.json({
-    events,
-    summary: { totalProceeds, totalCost, totalGain, totalTax: totalGain * rate }
-  });
+  const tp = events.reduce((s, e) => s + e.proceeds, 0);
+  const tc = events.reduce((s, e) => s + e.costBasis, 0);
+  const tg = tp - tc;
+  res.json({ events, summary: { totalProceeds: tp, totalCost: tc, totalGain: tg, totalTax: tg * rate } });
 });
 
-// CSV – теперь возвращает реальные данные
+// CSV
 app.get('/api/tax/report/:year/csv', auth, (req, res) => {
   const sells = transactions.filter(t => t.userId === req.userId && (t.type === 'SELL' || t.type === 'SWAP_OUT'));
   const rate = 0.13;
@@ -190,8 +198,10 @@ app.get('/api/tax/report/:year/csv', auth, (req, res) => {
   res.send(csv);
 });
 
-// PDF – заглушка (реальную PDF можно добавить позже)
+// PDF (заглушка)
 app.get('/api/tax/report/:year/pdf', auth, (req, res) => {
+  res.header('Content-Type', 'application/pdf');
+  res.attachment(`tax-report-${req.params.year}.pdf`);
   res.send('PDF будет доступен позже');
 });
 
