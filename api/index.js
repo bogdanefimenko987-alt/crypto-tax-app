@@ -19,7 +19,7 @@ app.use(express.json());
 const users = [];
 const transactions = [];
 
-// ─── Auth ───
+// ─── Auth (демо: авторегистрация при логине) ───
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -35,10 +35,21 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = users.find(u => u.email === email);
-    if (!user || !await bcrypt.compare(password, user.passwordHash)) {
-      return res.status(401).json({ error: 'Неверные учетные данные' });
+    let user = users.find(u => u.email === email);
+
+    // Если пользователь не найден, создаём его автоматически
+    if (!user) {
+      const hash = await bcrypt.hash(password, 10);
+      user = { id: uuidv4(), email, passwordHash: hash };
+      users.push(user);
     }
+
+    // Проверяем пароль (для только что созданного он всегда подойдёт)
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Неверный пароль' });
+    }
+
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'defaultsecret',
@@ -50,7 +61,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// ─── Простой middleware (извлекает userId, но не блокирует при отсутствии токена) ───
+// ─── Middleware (извлекает userId, но не блокирует) ───
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -58,14 +69,12 @@ function authenticate(req, res, next) {
     try {
       const payload = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret');
       req.userId = payload.userId;
-    } catch (err) {
-      // токен невалиден – оставляем req.userId = undefined
-    }
+    } catch (err) {}
   }
-  next(); // всегда пропускаем запрос дальше
+  next();
 }
 
-// ─── Transactions (защищены, но без токена вернут пустой массив) ───
+// ─── Transactions ───
 app.get('/api/transactions', authenticate, (req, res) => {
   if (!req.userId) return res.json([]);
   res.json(transactions.filter(tx => tx.userId === req.userId));
