@@ -16,7 +16,7 @@ app.use(express.json());
 
 const users = [];
 const transactions = [];
-const categories = {};
+const categories = {};   // { валюта: категория }
 
 // --- Auth ---
 app.post('/api/auth/login', (req, res) => {
@@ -52,11 +52,13 @@ app.get('/api/transactions', auth, (req, res) => {
 app.post('/api/transactions/manual', auth, (req, res) => {
   if (!req.userId) return res.status(401).json({ error: 'Требуется авторизация' });
   const { type, baseCurrency, quoteCurrency, baseAmount, quoteAmount, fee, feeCurrency, timestamp, notes } = req.body;
-  const tx = { id: uuidv4(), userId: req.userId, type, baseCurrency, quoteCurrency,
+  const tx = {
+    id: uuidv4(), userId: req.userId, type, baseCurrency, quoteCurrency,
     baseAmount: Number(baseAmount), quoteAmount: Number(quoteAmount) || 0,
     fee: Number(fee) || 0, feeCurrency: feeCurrency || null,
     timestamp: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
-    notes: notes || '', createdAt: new Date().toISOString() };
+    notes: notes || '', createdAt: new Date().toISOString()
+  };
   transactions.push(tx);
   res.json(tx);
 });
@@ -80,15 +82,16 @@ app.get('/api/portfolio', auth, (req, res) => {
 // --- History ---
 app.get('/api/portfolio/history', auth, (req, res) => {
   if (!req.userId) return res.json([]);
-  const txs = transactions.filter(t => t.userId === req.userId).sort((a,b) => new Date(a.timestamp)-new Date(b.timestamp));
+  const txs = transactions.filter(t => t.userId === req.userId)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   const bal = {}, hist = [];
   for (const t of txs) {
-    const dk = new Date(t.timestamp).toISOString().slice(0,10);
-    if (!hist.length || hist[hist.length-1].date !== dk) hist.push({ date: dk });
+    const dk = new Date(t.timestamp).toISOString().slice(0, 10);
+    if (!hist.length || hist[hist.length - 1].date !== dk) hist.push({ date: dk });
     const sign = (t.type === 'BUY' || t.type === 'SWAP_IN') ? 1 : -1;
     bal[t.baseCurrency] = (bal[t.baseCurrency] || 0) + sign * t.baseAmount;
-    const last = hist[hist.length-1];
-    for (const [c,v] of Object.entries(bal)) last[c] = Number(v.toFixed(8));
+    const last = hist[hist.length - 1];
+    for (const [c, v] of Object.entries(bal)) last[c] = Number(v.toFixed(8));
   }
   res.json(hist);
 });
@@ -96,51 +99,105 @@ app.get('/api/portfolio/history', auth, (req, res) => {
 // --- PnL ---
 app.get('/api/portfolio/pnl', auth, (req, res) => {
   if (!req.userId) return res.json([]);
-  const sells = transactions.filter(t => t.userId === req.userId && (t.type==='SELL'||t.type==='SWAP_OUT'));
+  const sells = transactions.filter(t => t.userId === req.userId && (t.type === 'SELL' || t.type === 'SWAP_OUT'));
   const pnl = {};
   for (const t of sells) {
     const c = t.baseCurrency;
     if (!pnl[c]) pnl[c] = { proceeds: 0, costBasis: 0, gainLoss: 0 };
     pnl[c].proceeds += t.quoteAmount;
-    const buys = transactions.filter(b => b.userId===req.userId && b.baseCurrency===c && (b.type==='BUY'||b.type==='SWAP_IN'));
-    const totalBought = buys.reduce((s,b)=>s+b.baseAmount,0);
-    const totalCost = buys.reduce((s,b)=>s+b.quoteAmount,0);
-    const avgCost = totalBought ? totalCost/totalBought : 0;
+    const buys = transactions.filter(b => b.userId === req.userId && b.baseCurrency === c && (b.type === 'BUY' || b.type === 'SWAP_IN'));
+    const totalBought = buys.reduce((s, b) => s + b.baseAmount, 0);
+    const totalCost = buys.reduce((s, b) => s + b.quoteAmount, 0);
+    const avgCost = totalBought ? totalCost / totalBought : 0;
     pnl[c].costBasis += avgCost * t.baseAmount;
     pnl[c].gainLoss += t.quoteAmount - avgCost * t.baseAmount;
   }
-  res.json(Object.entries(pnl).map(([cur,data])=>({currency:cur,...data})));
+  res.json(Object.entries(pnl).map(([cur, data]) => ({ currency: cur, ...data })));
 });
 
-// --- Categories ---
-app.get('/api/portfolio/categories', auth, (req, res) => res.json(Object.entries(categories).map(([c,cat])=>({id:c, currency:c, category:cat}))));
+// --- Categories (исправлено – храним словарь) ---
+app.get('/api/portfolio/categories', auth, (req, res) => {
+  res.json(Object.keys(categories).map(currency => ({
+    id: currency,
+    userId: req.userId,
+    currency,
+    category: categories[currency]
+  })));
+});
 app.post('/api/portfolio/categories', auth, (req, res) => {
   const { currency, category } = req.body;
-  categories[currency] = category;
+  if (currency && category) {
+    categories[currency] = category;
+  }
   res.json({ success: true });
 });
 
 // --- Tax ---
 app.get('/api/tax/report/:year', auth, (req, res) => {
-  const sells = transactions.filter(t => t.userId === req.userId && (t.type==='SELL'||t.type==='SWAP_OUT'));
+  const sells = transactions.filter(t => t.userId === req.userId && (t.type === 'SELL' || t.type === 'SWAP_OUT'));
   const rate = 0.13;
   const events = sells.map(t => {
-    const buys = transactions.filter(b => b.userId===req.userId && b.baseCurrency===t.baseCurrency && (b.type==='BUY'||b.type==='SWAP_IN'));
-    const totalBought = buys.reduce((s,b)=>s+b.baseAmount,0);
-    const totalCost = buys.reduce((s,b)=>s+b.quoteAmount,0);
-    const avgCost = totalBought ? totalCost/totalBought : 0;
+    const buys = transactions.filter(b => b.userId === req.userId && b.baseCurrency === t.baseCurrency && (b.type === 'BUY' || b.type === 'SWAP_IN'));
+    const totalBought = buys.reduce((s, b) => s + b.baseAmount, 0);
+    const totalCost = buys.reduce((s, b) => s + b.quoteAmount, 0);
+    const avgCost = totalBought ? totalCost / totalBought : 0;
     const cost = avgCost * t.baseAmount;
     const gain = t.quoteAmount - cost;
-    return { date: t.timestamp, currency: t.baseCurrency, proceeds: t.quoteAmount, costBasis: cost, gainLoss: gain, taxRate: rate, taxAmount: gain * rate };
+    return {
+      date: t.timestamp,
+      currency: t.baseCurrency,
+      proceeds: t.quoteAmount,
+      costBasis: cost,
+      gainLoss: gain,
+      taxRate: rate,
+      taxAmount: gain * rate
+    };
   });
-  const tp = events.reduce((s,e)=>s+e.proceeds,0);
-  const tc = events.reduce((s,e)=>s+e.costBasis,0);
-  const tg = tp - tc;
-  res.json({ events, summary: { totalProceeds: tp, totalCost: tc, totalGain: tg, totalTax: tg * rate } });
+  const totalProceeds = events.reduce((s, e) => s + e.proceeds, 0);
+  const totalCost = events.reduce((s, e) => s + e.costBasis, 0);
+  const totalGain = totalProceeds - totalCost;
+  res.json({
+    events,
+    summary: { totalProceeds, totalCost, totalGain, totalTax: totalGain * rate }
+  });
 });
-app.get('/api/tax/report/:year/csv', auth, (req, res) => res.header('Content-Type','text/csv').send('date,currency,proceeds,costBasis,gainLoss,taxRate,taxAmount'));
-app.get('/api/tax/report/:year/pdf', auth, (req, res) => res.json({}));
-app.get('/api/tax/declaration/:year', auth, (req, res) => res.json({ totalIncome:0, totalLoss:0, totalTax:0 }));
+
+// CSV – теперь возвращает реальные данные
+app.get('/api/tax/report/:year/csv', auth, (req, res) => {
+  const sells = transactions.filter(t => t.userId === req.userId && (t.type === 'SELL' || t.type === 'SWAP_OUT'));
+  const rate = 0.13;
+  const rows = sells.map(t => {
+    const buys = transactions.filter(b => b.userId === req.userId && b.baseCurrency === t.baseCurrency && (b.type === 'BUY' || b.type === 'SWAP_IN'));
+    const totalBought = buys.reduce((s, b) => s + b.baseAmount, 0);
+    const totalCost = buys.reduce((s, b) => s + b.quoteAmount, 0);
+    const avgCost = totalBought ? totalCost / totalBought : 0;
+    const cost = avgCost * t.baseAmount;
+    const gain = t.quoteAmount - cost;
+    return {
+      date: t.timestamp.slice(0, 10),
+      currency: t.baseCurrency,
+      proceeds: t.quoteAmount.toFixed(2),
+      costBasis: cost.toFixed(2),
+      gainLoss: gain.toFixed(2),
+      taxRate: rate,
+      taxAmount: (gain * rate).toFixed(2)
+    };
+  });
+  const header = 'date,currency,proceeds,costBasis,gainLoss,taxRate,taxAmount';
+  const csv = header + '\n' + rows.map(r => Object.values(r).join(',')).join('\n');
+  res.header('Content-Type', 'text/csv; charset=utf-8');
+  res.attachment(`tax-report-${req.params.year}.csv`);
+  res.send(csv);
+});
+
+// PDF – заглушка (реальную PDF можно добавить позже)
+app.get('/api/tax/report/:year/pdf', auth, (req, res) => {
+  res.send('PDF будет доступен позже');
+});
+
+app.get('/api/tax/declaration/:year', auth, (req, res) => {
+  res.json({ totalIncome: 0, totalLoss: 0, totalTax: 0 });
+});
 
 // --- Exchanges ---
 app.post('/api/exchanges/connect', auth, (req, res) => res.json({ success: true }));
